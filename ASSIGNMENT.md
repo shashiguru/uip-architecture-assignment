@@ -70,5 +70,3 @@ Your design should account for the following core functionalities of the UIP:
     *   How real-time/high-volume data flows and daily reporting are supported
     *   One or two major trade-offs you considered
 
-## Submission
-Please send your deliverables to your HR contact **12 hours before your scheduled interview**. Be prepared to present and explain your approach to the panel during the interview.
