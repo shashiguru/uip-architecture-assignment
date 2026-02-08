@@ -15,7 +15,6 @@ The design emphasizes:
   - Detailed swimlane diagrams for authentication, request processing, and saga patterns.
   - Deep dives into Frontend (MSAL/OIDC), Middleware (WAF/APIM), and Backend (AKS/Eventing) implementation.
   - Protocol specifics, resilience policies (Polly), and analytics pipelines.
-- `README.md`: **Executive Summary** - High-level system overview, architecture principles, and quick links (this document).
-- `docs/`: Detailed design docs for specific concerns (Security, Networking, etc.).
-- `diagrams/`: Source Mermaid diagrams.
+- `README.md`: **Executive Summary** - High-level system overview, architecture principles, and quick reference.
+- [Figma Architecture Design](https://www.figma.com/board/zi7c9qPP2Wsni7kXYxt8nF/UIP-Architecture-Design?node-id=0-1&p=f&t=04HKvLfQyQe0EL8p-0) 
 
