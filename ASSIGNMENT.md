@@ -1,4 +1,4 @@
-# Senior Developer Take-Home Assignment: Unified Integration Platform (UIP) Architecture
+# Assignment: Unified Integration Platform (UIP) Architecture
 
 ## Objective
 As part of this assignment, you are required to design the architecture for a Unified Integration Platform (UIP) that serves both web and mobile front-ends and is deployed on Microsoft Azure. The goal is to demonstrate your ability to architect a cloud-native enterprise integration platform that connects core services with multiple external systems, while considering both functional and non-functional requirements.
