@@ -133,7 +133,7 @@ sequenceDiagram
 
     Client->>WAF: HTTPS Request
     
-    rect rgb(255, 230, 230)
+    rect rgb(0, 0, 0)
         Note right of WAF: Security Edge
         WAF->>WAF: Decrypt & Inspect (OWASP)
         alt Malicious Payload
@@ -143,7 +143,7 @@ sequenceDiagram
 
     WAF->>APIM: Forward Request
     
-    rect rgb(230, 240, 255)
+    rect rgb(0, 0, 0)
         Note right of APIM: Policy Execution
         APIM->>APIM: Check Subscription Key
         APIM->>APIM: Validate JWT
@@ -543,25 +543,42 @@ We treat operations as a software problem, using data to drive decisions.
 
 ## 13. End-to-End Request Flow (Consolidated)
 
-To visualize how all layers work together, we differentiate between Synchronous (User-Facing) and Asynchronous (Background) flows.
+To visualize how all layers work together, we differentiate between **Synchronous** (Read), **Asynchronous** (Write/Process), and **Real-Time** (Feedback) flows.
 
 ### Scenario A: Synchronous (Get Dashboard Data)
 **Criticality:** High Latency Sensitivity.
 **Flow:**
-1.  **User** requests Dashboard.
-2.  **WAF** validates security.
-3.  **APIM** checks cache (Redis). Hit? Return.
-4.  **AKS API** calls **Cosmos DB** (Read Model).
-5.  **Response** sent back. **SQL** (Write Model) is NOT touched to ensure speed.
+1.  **User** requests the Dashboard.
+2.  **APIM** checks **Redis Cache** first.
+    *   *Hit?* Return data immediately (sub-millisecond).
+3.  **AKS API** (if cache miss) calls **Cosmos DB** (Read Model).
+    *   *Note:* It does **not** query the heavy Azure SQL (Transactional DB) to ensure speed.
+4.  **Response** is returned and cached in Redis.
 
-### Scenario B: Asynchronous (Submit Order / File)
-**Criticality:** High Reliability/Consistency.
+### Scenario B: Asynchronous (Submit Large File/Order)
+**Criticality:** High Reliability & Data Integrity.
 **Flow:**
-1.  **User** submits Order.
-2.  **AKS API** validates schema, saves "Pending" state to **SQL**, and ACKS user immediately ("Order Received").
-3.  **Service Bus** receives "OrderCreated" event.
-4.  **Worker** picks up event, calls **Inventory System** (SAP), updates **SQL** to "Confirmed", and updates **Cosmos** Read Model.
-5.  **Notification Service** emails user.
+1.  **Submission**: User uploads a file/order.
+2.  **Orchestrator**:
+    *   Validates schema.
+    *   Creates a **Job Record** in **Azure SQL** with status **`PENDING`**.
+    *   Publishes a command to **Service Bus**.
+    *   Returns `202 Accepted` with a `Job-ID` to the user.
+3.  **Processing**:
+    *   **Worker** picks up the message.
+    *   Updates Azure SQL status to **`IN_PROGRESS`**.
+    *   Calls **Integration Adapter** (e.g., SAP).
+4.  **Completion**:
+    *   Worker updates Azure SQL status to **`COMPLETED`**.
+    *   Saves the final payload to **Cosmos DB** (for history).
+
+### Scenario C: Real-Time Feedback (The "Push")
+**Criticality:** User Experience (UX).
+**Flow:**
+1.  **Event**: When the Worker completes the job (Scenario B), it publishes a `JobCompleted` event.
+2.  **WebPubSub Service**: Receives this event.
+3.  **Push**: Instantly pushes a WebSocket message (`{"jobId": 123, "status": "Success"}`) to the User's active browser session.
+4.  **UI Update**: The Dashboard shows a green checkmark without the user refreshing the page.
 
 ### Consolidated Sequence Diagram
 
@@ -569,38 +586,37 @@ To visualize how all layers work together, we differentiate between Synchronous 
 sequenceDiagram
     participant User
     participant Edge as WAF/APIM
-    participant API as AKS API
-    participant Cache as Redis
+    participant API as Orchestrator
+    participant SQL as Azure SQL (State)
     participant Bus as Service Bus
-    participant Worker as Background Worker
-    participant DB as SQL/Cosmos
+    participant Worker as Backend Worker
+    participant PubSub as WebPubSub
 
-    rect rgb(240, 255, 240)
+    rect rgb(0, 0, 0)
         Note left of User: Sync Flow (Read)
         User->>Edge: GET /dashboard
-        Edge->>Cache: Check Cache
-        alt Hit
-            Cache-->>Edge: Data
-        else Miss
-            Edge->>API: Call Service
-            API->>DB: Query Read Model (Cosmos)
-            DB-->>API: Data
-            API-->>Edge: Data
-        end
+        Edge->>API: Fetch Data
+        API->>SQL: Query Status (Lightweight)
+        API-->>Edge: Return JSON
         Edge-->>User: 200 OK
     end
 
-    rect rgb(255, 245, 230)
+    rect rgb(0, 0, 0)
         Note left of User: Async Flow (Write)
-        User->>Edge: POST /order
-        Edge->>API: Validate & Accept
-        API->>Bus: Publish "OrderCreated"
-        API-->>User: 202 Accepted
+        User->>Edge: POST /upload
+        Edge->>API: Submit Job
+        API->>SQL: INSERT Job (Status: PENDING)
+        API->>Bus: Publish "JobCreated"
+        API-->>User: 202 Accepted (Job-ID)
         
-        par Background
-            Bus->>Worker: Consume Event
-            Worker->>DB: Update SQL (OLTP)
-            Worker->>DB: Update Cosmos (Read)
+        par Background Processing
+            Bus->>Worker: Consume Message
+            Worker->>SQL: Update Status: IN_PROGRESS
+            Worker->>Worker: Execute Business Logic / External Call
+            Worker->>SQL: Update Status: COMPLETED
+            
+            Worker->>PubSub: Publish "JobDone"
+            PubSub-->>User: WebSocket Push (Refresh UI)
         end
     end
 ```
