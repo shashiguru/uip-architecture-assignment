@@ -412,11 +412,10 @@ A secure, segmented network foundation is critical for the UIP. The design lever
 ```mermaid
 graph TD
     Internet((Internet)) --> WAF[App Gateway WAF]
-    WAF --> APIM[APIM (VNet Injection)]
+    WAF --> APIM["APIM (VNet Injection)"]
     APIM --> AKS[AKS Cluster]
     
     subgraph VNet["UIP VNet (10.1.0.0/16)"]
-        WAF
         APIM
         AKS
         PE[Private Endpoints]
